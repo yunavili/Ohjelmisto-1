@@ -65,4 +65,4 @@ for hirvio in hirviot:
     hirvio.tulosta_tiedot()
     pelaajahahmo.taistelu(hirvio)
     input()
-print(f"Peli ohi.")
+print("Peli ohi.")
