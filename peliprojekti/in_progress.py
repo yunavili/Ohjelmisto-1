@@ -39,7 +39,7 @@ if int(player_age) < 12:
     sys.exit()
 else:
     print(f"Hello, {player_name}! You're {player_age} years old, that's a pretty solid age, but even so you'll prove yourself!")
-
+#it's time to banish the demon (to refactor the character's sys)
 
 class Character:
     def __init__(self, name, place, hp):
@@ -58,7 +58,14 @@ class Character:
         else:
             return "Full Health"
 
-       
+    def getting_damage(self, damage):
+        self.player_hp -= damage
+        print(f"You took {damage} damage! A sudden surge of pain weakens your whole body.")
+        if self.player_hp <= 0:
+            print("\nYour body has officially given up on you. Game Over!")
+            sys.exit()
+
+        
 class Player(Character):
 
     def __init__(self, name, place, hp=20, max_weight=100):
@@ -76,18 +83,20 @@ class Player(Character):
         else:
             print("The room is empty.")
 
+
     def collect_item(self):
-        item = self.place.item
+    
+        item = self.place.item_granting()
         if item:
             if self.max_weight < self.current_weight + item.weight:
                 print(f"You cannot pick up {item.name}, it's too heavy! Current weight: {self.current_weight}/{self.max_weight}")
             else:
                 self.current_weight += item.weight
                 self.inventory.append(item)
-                self.place.item = None
                 print(f"{item.name.capitalize()} was added. Current weight: {self.current_weight}/{self.max_weight}")
         else:
             print("There's nothing to pick up")
+
 
     def show_inventory(self):
         if not self.inventory:
@@ -97,6 +106,7 @@ class Player(Character):
             for index, item in enumerate(self.inventory, start=1):
                 print(f"{index}. {item.name.capitalize()}")
 
+
     def throw_item(self, index):
         if 0 <= index < len(self.inventory):
             item = self.inventory[index]
@@ -104,7 +114,34 @@ class Player(Character):
             self.current_weight -= item.weight
             print(f"You threw away {item.name}. Now it's destroyed. Forever. \nCurrent weight: {self.current_weight}/{self.max_weight}")
         else:
-            print("Item not in inventory")
+            print("Item not in inventory")#The issue is that will user delete by name or by button—or delete based on the index and a button press? By button i suppose rn
+
+    def healing(self, potion):
+        if self.player_hp >= self.max_hp:
+            print("You are already at full health!")
+            return
+        else:
+            self.player_hp = min(self.player_hp + 5, self.max_hp) 
+            print(f"You ate a piece of bread and restored 5 HP! Current HP {self.player_hp}/{self.max_hp}")
+
+
+class Enemy(Character):
+    def __init__(self, name, hp, attack, place, loot=None):
+        super().__init__(name, place, hp)
+        self.attack_power = attack
+        self.loot = loot
+
+    def attack(self, target_player):
+        print(f"{self.name} attacks {target_player.name} for {self.attack_power} damage!")
+        target_player.getting_damage(self.attack_power)
+
+class NPC(Character):
+    def __init__(self, name, place, dialigue):
+        super().__init__(name, place, hp=10)
+        self.dialigue = dialigue
+
+    def talk(self):
+        print(f'{self.name}: "{self.dialigue}"')
 
 
 class Item:
@@ -114,31 +151,52 @@ class Item:
 
 
 class Room:
-    def __init__(self, name, item=None, description="Nothing special here.", interactions=None):
+    def __init__(self, name, item=None, enemy=None, characters=None, description="Nothing special here.", interactions=None):
         self.name = name
         self.item = item
+        self.enemy = enemy
+        self.characters = characters or []
         self.description = description
         self.interactions = interactions or {}
+    
+
+    def item_granting(self):
+        if not self.item:
+            print("There is no item here to take.")
+            return None
+
+        granting_choice = input(f"Do you want to collect {self.item.name}?\n1. Yes\n2. No\n> ").strip().capitalize()
+        if granting_choice in ["1", "Yes"]:
+            picked_item = self.item
+            self.item = None
+            return picked_item
+        else:
+            print("You chose not to pick up the item.")
+            return None
+
 
     def inspect(self):
         print(self.description)
-        if self.item:
-            print(f"You see {self.item.name} here.")
-        else:
-            print("There are no items of interest here.")
     
-    def interact(self, action):
+    def ineract(self, action):
         if action in self.interactions:
             print(self.interactions[action])
         else:
             print("The silence in the room just got significantly more awkward.")
 
 
+class HealingPotion(Item):
+    def __init__(self, name, weight, hp_amount):
+        self.hp_amount = hp_amount
+        super().__init__(name, weight)
+        
+
 class Dice:
     def __init__(self, sides=20):
         self.sides = sides
     
-    def roll(self, count=1, modifier=0, mode=None):
+    def roll(self, count=1, modifier=0, mode = None):
+        
         if mode == "adv" or mode == "dis":
             roll1 = random.randint(1, self.sides)
             roll2 = random.randint(1, self.sides)
@@ -149,6 +207,7 @@ class Dice:
                 selected_roll = min(roll1, roll2)
 
             total = selected_roll + modifier
+            
             return total
             
         roll_results = []
@@ -161,45 +220,50 @@ class Dice:
 
         return total
 
+#items that get duplicated??? limit it to 5 heals? No. Let it be infinite. That’s what I want for myself.
 
 book = Item("Book of Inept Spells", 20)
 dagger = Item("Rusty Dagger", 15)
 stone = Item("Mysterious Glowing Stone", 35)
 key = Item("Heavy Iron Key", 10)
+healingPotion = HealingPotion("Healing potion", 5, 5) #do not have use for now
 
 room1 = Room(
         "Dungeon Cell", 
         item=dagger, 
         description="A cold, damp stone cell. Moisture drips from the ceiling.",
         interactions={
-        "inspect shackles": "The iron shackles are rusted, but still firmly anchored to the wall."
+        "inspect shackles": (
+            "The iron shackles are rusted, but still firmly anchored to the wall."
+            )
         }
-)
+        )
 room2 = Room(
         "Ancient library", 
         item=book, 
-        description="Dusty bookshelves line the walls, full of forgotten knowledge."
-)
+        description="Dusty bookshelves line the walls, full of forgotten knowledge.")
+
 room3 = Room(
         "Mystical vault",
         item=stone,
         description="Glowing runes flicker along the marble walls in this eerie vault.",
         interactions={
-        "touch runes": "A mild shock runs up your arm! (Damage prevented)"
-        }
-)
+        "touch runes": "A mild shock runs up your arm! (Damage prevented)",#but i'll add it later
+    })
+
 room4 = Room(
         "Guard post",
         item=key,
-        description="An abandoned guard post with a overturned wooden table."
-)
+        description="An abandoned guard post with a overturned wooden table.")
+
 start_location = Room(
         "Hallway",
         item=None,
-        description="A long, shadowy corridor connecting multiple rooms."
-)
+        description="A long, shadowy corridor connecting multiple rooms.")
 
 rooms = [room1, room2, room3, room4, start_location]
+#if there's something in the room game will notify about it
+#if there's interactions to the room game will notify about it
 
 dice_20 = Dice(20)
 dice_6 = Dice(6)
@@ -234,7 +298,7 @@ try:
             print(f"Your stats:\nHP: {player.player_hp}/{player.max_hp} ({player.get_hp_status()})\nStrength: 10\nDexterity: 10")
 
         elif player_input == "3":
-            room_choice = input("Where do you want to go?\n1. Dungeon Cell\n2. Old library\n3. Mystical vault\n4. Guard post\n5. Hallway\n> ").strip()
+            room_choice = input("Where do you want to go?\n1.Dungeon Cell\n2. Old library\n3. Mystical vault\n4. Guard post\n5. Hallway\n").strip()
 
             try:
                 choice_idx = int(room_choice)
@@ -243,12 +307,17 @@ try:
 
                     if player.place == selected_room:
                         print("You're already here!")
+                        continue
                     else:
-                        player.move(selected_room)
+                        player.place = selected_room
+                        print(f"You moved to {player.place.name}")
+                        continue
                 else:
                     print("There's no such room!")
+                    continue
             except ValueError:
                 print("Please enter a valid room number!")
+                continue
 
         elif player_input == "4":
             player.player_hp = player.max_hp
@@ -283,3 +352,8 @@ try:
 
 except KeyboardInterrupt:
     print("\nGame closed. See you next time!")
+
+
+#сделать взаимодействие с комнатами
+#гг атакует кубиком
+#написать саму игру и концовки (1 смерть, 2 концовка с нпс, 3 победа всех врагов)
